@@ -13,6 +13,11 @@ vectorizer = joblib.load(vectorizer_path)
 
 app = Flask(__name__)
 CORS(app)
+
+@app.route("/", methods=["GET"])
+def home():
+    return jsonify({"message": "✅ Velar AI backend is live!"}), 200
+  
 @app.route("/api/predict", methods=["POST"])
 def predict():
     data = request.json
