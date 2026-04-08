@@ -115,9 +115,10 @@ class StatisticsState extends State<Statistics> with TickerProviderStateMixin {
       };
 
       // 3. Build URI
-      final uri = Uri.parse(
-        '${Environment.baseUrl}/api/transactions',
-      ).replace(queryParameters: queryParams);
+      final uri = Environment.apiUri(
+        '/transactions',
+        queryParameters: queryParams,
+      );
 
       // 4. Send GET request
       final response = await http.get(uri);

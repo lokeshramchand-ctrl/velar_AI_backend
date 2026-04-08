@@ -181,7 +181,7 @@ class _VoiceTransactionDialogState extends State<VoiceTransactionDialog>
       }
 
       final response = await http.post(
-        Uri.parse('${Environment.baseUrl}/api/transactions/voice'),
+        Environment.apiUri('/transactions/voice'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'userId': userId, 'voiceInput': _spokenText}),
       );

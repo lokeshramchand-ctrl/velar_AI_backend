@@ -52,7 +52,7 @@ class _ConfirmTransactionPageState extends State<ConfirmTransactionPage>
   }
 
   Future<void> _saveTransaction(BuildContext context) async {
-    const String saveUrl = '${Environment.baseUrl}/api/transaction/add';
+    final saveUrl = Environment.apiUri('/transactions/add');
 
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -63,7 +63,7 @@ class _ConfirmTransactionPageState extends State<ConfirmTransactionPage>
       }
 
       final response = await http.post(
-        Uri.parse(saveUrl),
+        saveUrl,
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'userId': userId,

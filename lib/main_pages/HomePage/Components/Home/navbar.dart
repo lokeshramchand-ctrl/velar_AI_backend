@@ -1,7 +1,7 @@
 // ignore_for_file: deprecated_member_use
 
 import 'package:flutter/material.dart';
-import 'package:monarch/main_pages/HomePage/Components/Manual/add_expense.dart';
+import 'package:monarch/auth/account_page.dart';
 import 'package:monarch/main_pages/HomePage/homepage.dart';
 import 'package:monarch/main_pages/Statistics/statistics.dart';
 
@@ -28,7 +28,7 @@ class CustomNavBar extends StatelessWidget {
   final List _navItems = const [
     NavItem(icon: Icons.home_rounded, index: 0, page: FinTrackHomePage()),
     NavItem(icon: Icons.bar_chart_rounded, index: 1, page: Statistics()),
-    NavItem(icon: Icons.settings_rounded, index: 2, page: AddExpenseScreen()),
+    NavItem(icon: Icons.person_rounded, index: 2, page: AccountPage()),
   ];
 
   @override

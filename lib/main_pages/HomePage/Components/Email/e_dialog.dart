@@ -147,10 +147,10 @@ class _EmailTransactionDialogState extends State<EmailTransactionDialog>
     try {
       final prefs = await SharedPreferences.getInstance();
       final userId = prefs.getString('userId');
-      final accessToken = prefs.getString('accessToken');
+      final accessToken = prefs.getString('googleAccessToken');
 
       final response = await http.post(
-        Uri.parse("${Environment.baseUrl}/api/transactions/email"),
+        Environment.apiUri('/transactions/email'),
         headers: {"Content-Type": "application/json"},
         body: jsonEncode({"accessToken": accessToken, "userId": userId}),
       );

@@ -5,7 +5,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
-import 'package:monarch/login.dart';
+import 'package:monarch/auth/auth_page.dart';
 import 'package:monarch/testing_pages/speech.dart';
 import 'package:monarch/main_pages/HomePage/Components/Manual/add_expense.dart';
 import 'package:monarch/main_pages/Statistics/Budget/update_budget.dart';
@@ -25,7 +25,7 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       theme: ThemeData(primarySwatch: Colors.blue),
-      home: const LoginScreen(),
+      home: const AuthPage(),
 
       // home: const SpeechInputPage(),
     );

@@ -17,9 +17,10 @@ Future<List<Map<String, dynamic>>> fetchRecentTransactions() async {
     }
 
     // 2️⃣ Create URI with userId
-    final uri = Uri.parse(
-      '${Environment.baseUrl}/api/transactions/recent',
-    ).replace(queryParameters: {'userId': userId});
+    final uri = Environment.apiUri(
+      '/transactions/recent',
+      queryParameters: {'userId': userId},
+    );
 
     // 3️⃣ Make API request
     final response = await http.get(uri);
