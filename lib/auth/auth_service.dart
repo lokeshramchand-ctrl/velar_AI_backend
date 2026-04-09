@@ -1,21 +1,22 @@
 import 'dart:convert';
+import 'dart:math';
 
 import 'package:http/http.dart' as http;
 import 'package:monarch/other_pages/enviroment.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class AuthService {
+  static const String _guestName = 'Guest Explorer';
+
   static Future<Map<String, dynamic>> register({
-    required String name,
-    required String email,
+    required String displayName,
     required String password,
   }) async {
     final response = await http.post(
       Environment.authUri('/register'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
-        'name': name,
-        'email': email,
+        'displayName': displayName,
         'password': password,
       }),
     );
@@ -24,77 +25,110 @@ class AuthService {
   }
 
   static Future<Map<String, dynamic>> login({
-    required String email,
+    required String displayName,
     required String password,
   }) async {
     final response = await http.post(
       Environment.authUri('/login'),
       headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'email': email, 'password': password}),
+      body: jsonEncode({'displayName': displayName, 'password': password}),
     );
 
     return _handleAuthResponse(response);
   }
 
-  static Future<Map<String, dynamic>> googleTokenLogin({
-    required String idToken,
-    String? googleAccessToken,
-    String? fallbackName,
-    String? fallbackEmail,
-  }) async {
-    final response = await http.post(
-      Environment.authUri('/google/token'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'idToken': idToken}),
-    );
-
-    return _handleAuthResponse(
-      response,
-      googleAccessToken: googleAccessToken,
-      fallbackName: fallbackName,
-      fallbackEmail: fallbackEmail,
-    );
-  }
-
+  
   static Future<Map<String, dynamic>> getCurrentUser() async {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('authToken');
 
-    final response = await http.get(
-      Environment.authUri('/me'),
-      headers: _authHeaders(token),
-    );
+    if (token == null || token.isEmpty) {
+      return {'success': true, 'user': _cachedUserFromPrefs(prefs)};
+    }
 
-    return _decodeResponse(response);
+    try {
+      final response = await http.get(
+        Environment.authUri('/me'),
+        headers: _authHeaders(token),
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return _decodeResponse(response);
+      }
+    } catch (_) {
+      // Fall back to locally cached session data while the backend is unavailable.
+    }
+
+    return {'success': true, 'user': _cachedUserFromPrefs(prefs)};
   }
 
   static Future<Map<String, dynamic>> logout() async {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('authToken');
 
-    final response = await http.post(
-      Environment.authUri('/logout'),
-      headers: _authHeaders(token),
-    );
+    if (token == null || token.isEmpty) {
+      await clearSession();
+      return {'success': true};
+    }
 
-    final data = _decodeResponse(response);
-    await clearSession();
-    return data;
+    try {
+      final response = await http.post(
+        Environment.authUri('/logout'),
+        headers: _authHeaders(token),
+      );
+
+      final data = _decodeResponse(response);
+      await clearSession();
+      return data;
+    } catch (_) {
+      await clearSession();
+      return {'success': true};
+    }
+  }
+
+  static Future<Map<String, dynamic>> createGuestSession({
+    String? displayName,
+  }) async {
+    final prefs = await SharedPreferences.getInstance();
+    final userId = _generateGuestUserId();
+    final resolvedDisplayName =
+        (displayName != null && displayName.trim().isNotEmpty)
+            ? displayName.trim()
+            : _guestName;
+
+    await prefs.setString('userId', userId);
+    await prefs.setString('displayName', resolvedDisplayName);
+    await prefs.setString('email', '$userId@guest.local');
+    await prefs.remove('authToken');
+
+    return {
+      'success': true,
+      'guest': true,
+      'user': {
+        'id': userId,
+        'displayName': resolvedDisplayName,
+        'email': '$userId@guest.local',
+      },
+    };
+  }
+
+  static Future<bool> hasSavedSession() async {
+    final prefs = await SharedPreferences.getInstance();
+    final userId = prefs.getString('userId');
+    return userId != null && userId.isNotEmpty;
   }
 
   static Future<void> clearSession() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('userId');
+    await prefs.remove('displayName');
     await prefs.remove('name');
-    await prefs.remove('email');
     await prefs.remove('authToken');
-    await prefs.remove('googleAccessToken');
   }
 
   static Future<Map<String, dynamic>> _handleAuthResponse(
     http.Response response, {
-    String? googleAccessToken,
-    String? fallbackName,
+    String? fallbackDisplayName,
     String? fallbackEmail,
   }) async {
     final data = _decodeResponse(response);
@@ -109,8 +143,7 @@ class AuthService {
 
     await _persistAuthData(
       data,
-      googleAccessToken: googleAccessToken,
-      fallbackName: fallbackName,
+      fallbackDisplayName: fallbackDisplayName,
       fallbackEmail: fallbackEmail,
     );
 
@@ -119,8 +152,7 @@ class AuthService {
 
   static Future<void> _persistAuthData(
     Map<String, dynamic> data, {
-    String? googleAccessToken,
-    String? fallbackName,
+    String? fallbackDisplayName,
     String? fallbackEmail,
   }) async {
     final prefs = await SharedPreferences.getInstance();
@@ -128,23 +160,23 @@ class AuthService {
     final token = _extractToken(data);
 
     final userId = user['_id']?.toString() ?? user['id']?.toString();
-    final name = user['name']?.toString() ?? fallbackName;
+    final displayName =
+        user['displayName']?.toString() ??
+        user['name']?.toString() ??
+        fallbackDisplayName;
     final email = user['email']?.toString() ?? fallbackEmail;
 
     if (userId != null && userId.isNotEmpty) {
       await prefs.setString('userId', userId);
     }
-    if (name != null && name.isNotEmpty) {
-      await prefs.setString('name', name);
+    if (displayName != null && displayName.isNotEmpty) {
+      await prefs.setString('displayName', displayName);
     }
     if (email != null && email.isNotEmpty) {
       await prefs.setString('email', email);
     }
     if (token != null && token.isNotEmpty) {
       await prefs.setString('authToken', token);
-    }
-    if (googleAccessToken != null && googleAccessToken.isNotEmpty) {
-      await prefs.setString('googleAccessToken', googleAccessToken);
     }
   }
 
@@ -217,5 +249,27 @@ class AuthService {
       }
     }
     return fallback.isEmpty ? 'Request failed' : fallback;
+  }
+
+  static Map<String, dynamic> _cachedUserFromPrefs(SharedPreferences prefs) {
+    final userId = prefs.getString('userId') ?? '';
+    final displayName =
+        prefs.getString('displayName') ??
+        prefs.getString('name') ??
+        _guestName;
+    final email = prefs.getString('email') ?? '';
+
+    return {
+      'id': userId,
+      'displayName': displayName,
+      'email': email,
+    };
+  }
+
+  static String _generateGuestUserId() {
+    final random = Random();
+    final timestamp = DateTime.now().millisecondsSinceEpoch.toRadixString(36);
+    final entropy = random.nextInt(0xFFFFFF).toRadixString(36).padLeft(5, '0');
+    return 'guest_$timestamp$entropy';
   }
 }

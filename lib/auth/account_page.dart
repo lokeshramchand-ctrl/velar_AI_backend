@@ -26,8 +26,8 @@ class _AccountPageState extends State<AccountPage> {
   Future<Map<String, dynamic>> _loadUser() async {
     final prefs = await SharedPreferences.getInstance();
     final cachedUser = <String, dynamic>{
-      'name': prefs.getString('name') ?? '',
-      'email': prefs.getString('email') ?? '',
+      'displayName':
+          prefs.getString('displayName') ?? prefs.getString('name') ?? '',
       'id': prefs.getString('userId') ?? '',
     };
 
@@ -149,8 +149,10 @@ class _AccountPageState extends State<AccountPage> {
           }
 
           final user = snapshot.data ?? <String, dynamic>{};
-          final name = user['name']?.toString() ?? '';
-          final email = user['email']?.toString() ?? '';
+          final name =
+              user['displayName']?.toString() ??
+              user['name']?.toString() ??
+              '';
           final id = user['_id']?.toString() ?? user['id']?.toString() ?? '';
 
           return Padding(
@@ -193,7 +195,7 @@ class _AccountPageState extends State<AccountPage> {
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        email.isEmpty ? 'Email unavailable' : email,
+                        'User ID: $id',
                         style: GoogleFonts.inter(
                           color: Colors.white.withOpacity(0.9),
                           fontSize: 14,
@@ -208,12 +210,6 @@ class _AccountPageState extends State<AccountPage> {
                   icon: Icons.person_outline,
                   label: 'Name',
                   value: name,
-                ),
-                const SizedBox(height: 14),
-                _infoTile(
-                  icon: Icons.email_outlined,
-                  label: 'Email',
-                  value: email,
                 ),
                 const SizedBox(height: 14),
                 _infoTile(

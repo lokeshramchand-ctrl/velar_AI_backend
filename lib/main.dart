@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 import 'package:monarch/auth/auth_page.dart';
+import 'package:monarch/auth/auth_service.dart';
 import 'package:monarch/testing_pages/speech.dart';
 import 'package:monarch/main_pages/HomePage/Components/Manual/add_expense.dart';
 import 'package:monarch/main_pages/Statistics/Budget/update_budget.dart';
@@ -25,9 +26,33 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       theme: ThemeData(primarySwatch: Colors.blue),
-      home: const AuthPage(),
+      home: const SessionBootstrap(),
 
       // home: const SpeechInputPage(),
+    );
+  }
+}
+
+class SessionBootstrap extends StatelessWidget {
+  const SessionBootstrap({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<bool>(
+      future: AuthService.hasSavedSession(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+
+        if (snapshot.data == true) {
+          return const FinTrackHomePage();
+        }
+
+        return const AuthPage();
+      },
     );
   }
 }

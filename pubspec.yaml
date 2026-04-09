@@ -16,14 +16,13 @@ dependencies:
   
   cupertino_icons: ^1.0.8
   http: ^1.4.0
-  google_fonts: ^6.3.0
   fl_chart: ^1.0.0
   shared_preferences: ^2.5.3
   flutter_dotenv: ^5.2.1
   manual_speech_to_text: ^1.0.4
   permission_handler: ^11.4.0
   another_telephony: ^0.4.1
-  google_sign_in: ^6.2.1
+  google_fonts: ^8.0.2
 
 
 
@@ -41,4 +40,3 @@ flutter:
 
   uses-material-design: true
 
-  

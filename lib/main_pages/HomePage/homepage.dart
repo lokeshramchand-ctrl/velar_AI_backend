@@ -59,7 +59,7 @@ class _FinTrackHomePageState extends State<FinTrackHomePage>
     final now = DateTime.now();
     final hour = now.hour;
     final prefs = await SharedPreferences.getInstance();
-    String? name = prefs.getString('name');
+    String? name = prefs.getString('displayName') ?? prefs.getString('name');
     String firstName = (name ?? "User").split(' ').first;
 
     String greeting;

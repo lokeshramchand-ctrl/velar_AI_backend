@@ -1,7 +1,6 @@
 // ignore_for_file: use_build_context_synchronously, deprecated_member_use, unused_import
 
 import 'package:flutter/material.dart';
-import 'package:google_sign_in/google_sign_in.dart';
 import 'package:http/http.dart' as http;
 import 'package:monarch/main_pages/HomePage/homepage.dart';
 import 'package:monarch/main_pages/HomePage/Components/Voice/voice_dialog.dart';
@@ -19,17 +18,8 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen>
     with TickerProviderStateMixin {
-  final GoogleSignIn _googleSignIn = GoogleSignIn(
-    scopes: [
-      'email',
-      'profile',
-      'openid',
-      'https://www.googleapis.com/auth/gmail.readonly',
-    ],
-    serverClientId: Environment.serverClientId,
-  );
 
-  bool _isLoading = false;
+
   late AnimationController _fadeController;
   late AnimationController _slideController;
   late AnimationController _scaleController;
@@ -113,60 +103,7 @@ class _LoginScreenState extends State<LoginScreen>
     super.dispose();
   }
 
-  Future<void> _handleGoogleSignIn() async {
-    setState(() => _isLoading = true);
-
-    try {
-      final GoogleSignInAccount? account = await _googleSignIn.signIn();
-
-      if (account == null) {
-        setState(() => _isLoading = false);
-        return;
-      }
-
-      final GoogleSignInAuthentication auth = await account.authentication;
-
-      final String? idToken = auth.idToken;
-      final String? accessToken = auth.accessToken;
-      final String? name = account.displayName;
-
-      if (idToken == null || accessToken == null) {
-        debugPrint("❌ Failed to get tokens");
-        return;
-      }
-
-      final uri = Uri.parse("${Environment.baseUrl}/auth/google/token");
-      final res = await http.post(
-        uri,
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode({"idToken": idToken}),
-      );
-
-      if (res.statusCode == 200) {
-        final data = jsonDecode(res.body);
-        if (data['success'] == true) {
-          final prefs = await SharedPreferences.getInstance();
-          prefs.setString('userId', data['user']['_id']);
-          prefs.setString('accessToken', accessToken);
-          // Save name & email locally
-          if (name != null) prefs.setString('name', name);
-
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (_) => FinTrackHomePage()),
-          );
-        } else {
-          debugPrint("❌ Login failed: ${data['error']}");
-        }
-      } else {
-        debugPrint("❌ Backend error: ${res.body}");
-      }
-    } catch (e) {
-      debugPrint("⚠ Google Sign-In error: $e");
-    } finally {
-      setState(() => _isLoading = false);
-    }
-  }
+  
 
   @override
   Widget build(BuildContext context) {
@@ -370,90 +307,6 @@ class _LoginScreenState extends State<LoginScreen>
 
                     const SizedBox(height: 48),
 
-                    // Google Sign In Button
-                    SlideTransition(
-                      position: _slideAnimation,
-                      child:
-                          _isLoading
-                              ? Container(
-                                width: double.infinity,
-                                height: 60,
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  borderRadius: BorderRadius.circular(30),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withOpacity(0.15),
-                                      blurRadius: 20,
-                                      spreadRadius: 2,
-                                      offset: const Offset(0, 8),
-                                    ),
-                                  ],
-                                ),
-                                child: const Center(
-                                  child: SizedBox(
-                                    width: 24,
-                                    height: 24,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      valueColor: AlwaysStoppedAnimation<Color>(
-                                        Color(0xFF1DB584),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              )
-                              : Container(
-                                width: double.infinity,
-                                height: 60,
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  borderRadius: BorderRadius.circular(30),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withOpacity(0.15),
-                                      blurRadius: 20,
-                                      spreadRadius: 2,
-                                      offset: const Offset(0, 8),
-                                    ),
-                                  ],
-                                ),
-                                child: Material(
-                                  color: Colors.transparent,
-                                  child: InkWell(
-                                    onTap: _handleGoogleSignIn,
-                                    borderRadius: BorderRadius.circular(30),
-                                    child: Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 24,
-                                      ),
-                                      child: Row(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.center,
-                                        children: [
-                                          Image.network(
-                                            'https://developers.google.com/identity/images/g-logo.png',
-                                            width: 24,
-                                            height: 24,
-                                          ),
-                                          const SizedBox(width: 16),
-                                          const Text(
-                                            'Continue with Google',
-                                            style: TextStyle(
-                                              fontFamily: 'Inter',
-                                              fontSize: 18,
-                                              fontWeight: FontWeight.w600,
-                                              color: Color(0xFF1F2937),
-                                              letterSpacing: 0.2,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                    ),
 
                     const SizedBox(height: 24),
 

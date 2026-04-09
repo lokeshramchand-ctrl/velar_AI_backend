@@ -1,12 +1,10 @@
 // ignore_for_file: use_build_context_synchronously, deprecated_member_use
 
 import 'package:flutter/material.dart';
-import 'package:google_sign_in/google_sign_in.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:monarch/auth/auth_service.dart';
 import 'package:monarch/main_pages/HomePage/homepage.dart';
 import 'package:monarch/other_pages/colors.dart';
-import 'package:monarch/other_pages/enviroment.dart';
 
 class AuthPage extends StatefulWidget {
   const AuthPage({super.key});
@@ -18,28 +16,14 @@ class AuthPage extends StatefulWidget {
 class _AuthPageState extends State<AuthPage> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
-  final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-
-  final GoogleSignIn _googleSignIn = GoogleSignIn(
-    scopes: const [
-      'email',
-      'profile',
-      'openid',
-      'https://www.googleapis.com/auth/gmail.readonly',
-    ],
-    serverClientId:
-        Environment.serverClientId.isEmpty ? null : Environment.serverClientId,
-  );
 
   bool _isRegisterMode = false;
   bool _isSubmitting = false;
-  bool _isGoogleLoading = false;
 
   @override
   void dispose() {
     _nameController.dispose();
-    _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
@@ -52,14 +36,12 @@ class _AuthPageState extends State<AuthPage> {
     try {
       if (_isRegisterMode) {
         await AuthService.register(
-          name: _nameController.text.trim(),
-          email: _emailController.text.trim(),
+          displayName: _nameController.text.trim(),
           password: _passwordController.text,
         );
       } else {
         await AuthService.login(
-          email: _emailController.text.trim(),
-          password: _passwordController.text,
+          password: _passwordController.text, displayName : _nameController.text.trim(),
         );
       }
 
@@ -77,41 +59,6 @@ class _AuthPageState extends State<AuthPage> {
     }
   }
 
-  Future<void> _handleGoogleSignIn() async {
-    setState(() => _isGoogleLoading = true);
-
-    try {
-      final account = await _googleSignIn.signIn();
-      if (account == null) return;
-
-      final auth = await account.authentication;
-      final idToken = auth.idToken;
-      final accessToken = auth.accessToken;
-
-      if (idToken == null || idToken.isEmpty) {
-        throw Exception('Google sign-in did not return an ID token');
-      }
-
-      await AuthService.googleTokenLogin(
-        idToken: idToken,
-        googleAccessToken: accessToken,
-        fallbackName: account.displayName,
-        fallbackEmail: account.email,
-      );
-
-      if (!mounted) return;
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const FinTrackHomePage()),
-      );
-    } catch (e) {
-      _showMessage(e.toString().replaceFirst('Exception: ', ''), isError: true);
-    } finally {
-      if (mounted) {
-        setState(() => _isGoogleLoading = false);
-      }
-    }
-  }
 
   void _showMessage(String message, {bool isError = false}) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -284,24 +231,6 @@ class _AuthPageState extends State<AuthPage> {
                         const SizedBox(height: 16),
                       ],
                       TextFormField(
-                        controller: _emailController,
-                        keyboardType: TextInputType.emailAddress,
-                        decoration: _inputDecoration(
-                          label: 'Email',
-                          icon: Icons.email_outlined,
-                        ),
-                        validator: (value) {
-                          if (value == null || value.trim().isEmpty) {
-                            return 'Email is required';
-                          }
-                          if (!value.contains('@')) {
-                            return 'Enter a valid email';
-                          }
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 16),
-                      TextFormField(
                         controller: _passwordController,
                         obscureText: true,
                         decoration: _inputDecoration(
@@ -372,31 +301,16 @@ class _AuthPageState extends State<AuthPage> {
                         ],
                       ),
                       const SizedBox(height: 16),
-                      SizedBox(
-                        width: double.infinity,
-                        child: OutlinedButton.icon(
-                          onPressed: _isGoogleLoading ? null : _handleGoogleSignIn,
-                          icon: _isGoogleLoading
-                              ? const SizedBox(
-                                  width: 18,
-                                  height: 18,
-                                  child: CircularProgressIndicator(strokeWidth: 2),
-                                )
-                              : const Icon(Icons.login),
-                          label: Text(
-                            'Continue with Google',
-                            style: GoogleFonts.inter(
-                              fontWeight: FontWeight.w700,
-                              color: primaryColor,
-                            ),
-                          ),
-                          style: OutlinedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 15),
-                            side: BorderSide(color: primaryColor.withOpacity(0.12)),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(18),
-                            ),
-                          ),
+                     
+                      const SizedBox(height: 12),
+                     
+                      const SizedBox(height: 8),
+                      Text(
+                        'A temporary guest profile with a random local user ID will be created on this device.',
+                        style: GoogleFonts.inter(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                          color: textSecondary,
                         ),
                       ),
                     ],
