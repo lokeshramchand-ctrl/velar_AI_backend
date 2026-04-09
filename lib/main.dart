@@ -26,33 +26,11 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       theme: ThemeData(primarySwatch: Colors.blue),
-      home: const SessionBootstrap(),
+      home: const AuthPage(),
 
       // home: const SpeechInputPage(),
     );
   }
 }
 
-class SessionBootstrap extends StatelessWidget {
-  const SessionBootstrap({super.key});
 
-  @override
-  Widget build(BuildContext context) {
-    return FutureBuilder<bool>(
-      future: AuthService.hasSavedSession(),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData) {
-          return const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
-          );
-        }
-
-        if (snapshot.data == true) {
-          return const FinTrackHomePage();
-        }
-
-        return const AuthPage();
-      },
-    );
-  }
-}

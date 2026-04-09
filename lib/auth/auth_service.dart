@@ -1,13 +1,13 @@
 import 'dart:convert';
 import 'dart:math';
-
 import 'package:http/http.dart' as http;
-import 'package:monarch/other_pages/enviroment.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:monarch/other_pages/enviroment.dart';
 
 class AuthService {
   static const String _guestName = 'Guest Explorer';
 
+  // ================= REGISTER =================
   static Future<Map<String, dynamic>> register({
     required String displayName,
     required String password,
@@ -24,6 +24,7 @@ class AuthService {
     return _handleAuthResponse(response);
   }
 
+  // ================= LOGIN =================
   static Future<Map<String, dynamic>> login({
     required String displayName,
     required String password,
@@ -31,238 +32,173 @@ class AuthService {
     final response = await http.post(
       Environment.authUri('/login'),
       headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'displayName': displayName, 'password': password}),
+      body: jsonEncode({
+        'displayName': displayName,
+        'password': password,
+      }),
     );
 
     return _handleAuthResponse(response);
   }
 
-  
+  // ================= GET USER =================
   static Future<Map<String, dynamic>> getCurrentUser() async {
     final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('authToken');
+    String? token = prefs.getString('authToken');
 
-    if (token == null || token.isEmpty) {
-      return {'success': true, 'user': _cachedUserFromPrefs(prefs)};
+    if (token == null) {
+      return {'success': false};
     }
 
-    try {
-      final response = await http.get(
+    final response = await http.get(
+      Environment.authUri('/me'),
+      headers: _authHeaders(token),
+    );
+
+    // 🔁 AUTO REFRESH
+    if (response.statusCode == 401) {
+      final refreshed = await _refreshToken();
+
+      if (!refreshed) {
+        await clearSession();
+        return {'success': false};
+      }
+
+      token = prefs.getString('authToken');
+
+      final retry = await http.get(
         Environment.authUri('/me'),
         headers: _authHeaders(token),
       );
 
-      if (response.statusCode >= 200 && response.statusCode < 300) {
-        return _decodeResponse(response);
-      }
-    } catch (_) {
-      // Fall back to locally cached session data while the backend is unavailable.
+      return _decodeResponse(retry);
     }
 
-    return {'success': true, 'user': _cachedUserFromPrefs(prefs)};
+    return _decodeResponse(response);
   }
 
-  static Future<Map<String, dynamic>> logout() async {
+  // ================= LOGOUT =================
+  static Future<void> logout() async {
     final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('authToken');
+    final refreshToken = prefs.getString('refreshToken');
 
-    if (token == null || token.isEmpty) {
-      await clearSession();
-      return {'success': true};
-    }
+    try {
+      await http.post(
+        Environment.authUri('/logout'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'refreshToken': refreshToken}),
+      );
+    } catch (_) {}
+
+    await clearSession();
+  }
+
+  // ================= REFRESH =================
+  static Future<bool> _refreshToken() async {
+    final prefs = await SharedPreferences.getInstance();
+    final refreshToken = prefs.getString('refreshToken');
+
+    if (refreshToken == null) return false;
 
     try {
       final response = await http.post(
-        Environment.authUri('/logout'),
-        headers: _authHeaders(token),
+        Environment.authUri('/refresh'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'refreshToken': refreshToken}),
       );
 
       final data = _decodeResponse(response);
-      await clearSession();
-      return data;
-    } catch (_) {
-      await clearSession();
-      return {'success': true};
+
+      if (response.statusCode == 200 && data['success'] == true) {
+        await _persistAuthData(data);
+        return true;
+      }
+    } catch (_) {}
+
+    return false;
+  }
+
+  // ================= HANDLE RESPONSE =================
+  static Future<Map<String, dynamic>> _handleAuthResponse(
+    http.Response response,
+  ) async {
+    final data = _decodeResponse(response);
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception(data['error'] ?? 'Request failed');
+    }
+
+    await _persistAuthData(data);
+    return data;
+  }
+
+  // ================= SAVE SESSION =================
+  static Future<void> _persistAuthData(Map<String, dynamic> data) async {
+    final prefs = await SharedPreferences.getInstance();
+
+    final user = data['user'];
+    final token = data['token'];
+    final refreshToken = data['refreshToken'];
+
+    if (user != null) {
+      await prefs.setString('userId', user['id']);
+      await prefs.setString('displayName', user['displayName']);
+    }
+
+    if (token != null) {
+      await prefs.setString('authToken', token);
+    }
+
+    if (refreshToken != null) {
+      await prefs.setString('refreshToken', refreshToken);
     }
   }
 
+  // ================= HEADERS =================
+  static Map<String, String> _authHeaders(String? token) {
+    return {
+      'Content-Type': 'application/json',
+      if (token != null) 'Authorization': 'Bearer $token',
+    };
+  }
+
+  // ================= CLEAR SESSION =================
+  static Future<void> clearSession() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.clear();
+  }
+
+  // ================= RESPONSE PARSER =================
+  static Map<String, dynamic> _decodeResponse(http.Response response) {
+    if (response.body.isEmpty) return {};
+
+    final decoded = jsonDecode(response.body);
+    if (decoded is Map<String, dynamic>) return decoded;
+
+    return {'data': decoded};
+  }
+
+  // ================= GUEST =================
   static Future<Map<String, dynamic>> createGuestSession({
     String? displayName,
   }) async {
     final prefs = await SharedPreferences.getInstance();
+
     final userId = _generateGuestUserId();
-    final resolvedDisplayName =
-        (displayName != null && displayName.trim().isNotEmpty)
-            ? displayName.trim()
-            : _guestName;
+    final name = (displayName?.trim().isNotEmpty ?? false)
+        ? displayName!.trim()
+        : _guestName;
 
     await prefs.setString('userId', userId);
-    await prefs.setString('displayName', resolvedDisplayName);
-    await prefs.setString('email', '$userId@guest.local');
-    await prefs.remove('authToken');
+    await prefs.setString('displayName', name);
 
     return {
       'success': true,
       'guest': true,
       'user': {
         'id': userId,
-        'displayName': resolvedDisplayName,
-        'email': '$userId@guest.local',
+        'displayName': name,
       },
-    };
-  }
-
-  static Future<bool> hasSavedSession() async {
-    final prefs = await SharedPreferences.getInstance();
-    final userId = prefs.getString('userId');
-    return userId != null && userId.isNotEmpty;
-  }
-
-  static Future<void> clearSession() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('userId');
-    await prefs.remove('displayName');
-    await prefs.remove('name');
-    await prefs.remove('authToken');
-  }
-
-  static Future<Map<String, dynamic>> _handleAuthResponse(
-    http.Response response, {
-    String? fallbackDisplayName,
-    String? fallbackEmail,
-  }) async {
-    final data = _decodeResponse(response);
-
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception(_extractErrorMessage(data, response.body));
-    }
-
-    if (data['success'] == false) {
-      throw Exception(_extractErrorMessage(data, response.body));
-    }
-
-    await _persistAuthData(
-      data,
-      fallbackDisplayName: fallbackDisplayName,
-      fallbackEmail: fallbackEmail,
-    );
-
-    return data;
-  }
-
-  static Future<void> _persistAuthData(
-    Map<String, dynamic> data, {
-    String? fallbackDisplayName,
-    String? fallbackEmail,
-  }) async {
-    final prefs = await SharedPreferences.getInstance();
-    final user = _extractUser(data);
-    final token = _extractToken(data);
-
-    final userId = user['_id']?.toString() ?? user['id']?.toString();
-    final displayName =
-        user['displayName']?.toString() ??
-        user['name']?.toString() ??
-        fallbackDisplayName;
-    final email = user['email']?.toString() ?? fallbackEmail;
-
-    if (userId != null && userId.isNotEmpty) {
-      await prefs.setString('userId', userId);
-    }
-    if (displayName != null && displayName.isNotEmpty) {
-      await prefs.setString('displayName', displayName);
-    }
-    if (email != null && email.isNotEmpty) {
-      await prefs.setString('email', email);
-    }
-    if (token != null && token.isNotEmpty) {
-      await prefs.setString('authToken', token);
-    }
-  }
-
-  static Map<String, dynamic> _extractUser(Map<String, dynamic> data) {
-    final rawUser = data['user'] ?? data['data']?['user'] ?? data['data'];
-    if (rawUser is Map<String, dynamic>) {
-      return rawUser;
-    }
-    if (rawUser is Map) {
-      return rawUser.cast<String, dynamic>();
-    }
-    return <String, dynamic>{};
-  }
-
-  static String? _extractToken(Map<String, dynamic> data) {
-    final candidates = [
-      data['token'],
-      data['accessToken'],
-      data['jwt'],
-      data['data']?['token'],
-      data['data']?['accessToken'],
-      data['data']?['jwt'],
-    ];
-
-    for (final candidate in candidates) {
-      if (candidate is String && candidate.isNotEmpty) {
-        return candidate;
-      }
-    }
-    return null;
-  }
-
-  static Map<String, String> _authHeaders(String? token) {
-    return {
-      'Content-Type': 'application/json',
-      if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
-    };
-  }
-
-  static Map<String, dynamic> _decodeResponse(http.Response response) {
-    if (response.body.isEmpty) {
-      return <String, dynamic>{};
-    }
-
-    final decoded = jsonDecode(response.body);
-    if (decoded is Map<String, dynamic>) {
-      return decoded;
-    }
-    if (decoded is Map) {
-      return decoded.cast<String, dynamic>();
-    }
-    return <String, dynamic>{'data': decoded};
-  }
-
-  static String _extractErrorMessage(
-    Map<String, dynamic> data,
-    String fallback,
-  ) {
-    final candidates = [
-      data['message'],
-      data['error'],
-      data['errors'] is List && (data['errors'] as List).isNotEmpty
-          ? data['errors'][0]
-          : null,
-    ];
-
-    for (final candidate in candidates) {
-      if (candidate is String && candidate.trim().isNotEmpty) {
-        return candidate;
-      }
-    }
-    return fallback.isEmpty ? 'Request failed' : fallback;
-  }
-
-  static Map<String, dynamic> _cachedUserFromPrefs(SharedPreferences prefs) {
-    final userId = prefs.getString('userId') ?? '';
-    final displayName =
-        prefs.getString('displayName') ??
-        prefs.getString('name') ??
-        _guestName;
-    final email = prefs.getString('email') ?? '';
-
-    return {
-      'id': userId,
-      'displayName': displayName,
-      'email': email,
     };
   }
 
